@@ -1,4 +1,4 @@
-//Run Mode 0.7 by Savage
+//Run Mode 0.8 by Savage
 
 {LIBDB}
 // =====================================
@@ -302,14 +302,14 @@ begin
 	for i := 1 to 32 do
 		if Players[i].Active then begin
 			
-			if (_ShowTimer[i]) and (Players[i].Alive) then
+			if _ShowTimer[i] then
 				Players[i].BigText(3, ShowTime(Now - _Timer[i]), 180, $FFFFFF, 0.1, 320, 360);
 			
 			if length(_CheckPoint) > 1 then
 				for j := 0 to High(_CheckPoint) do begin
 					
 					if _Laps = 0 then
-						if (_CheckPointPassed[i] <> 0) and (_CheckPointPassed[i] = j) and (Distance(_CheckPoint[j].X, _CheckPoint[j].Y, Players[i].X, Players[i].Y) <= 50) then
+						if (_CheckPointPassed[i] <> 0) and (_CheckPointPassed[i] = j) and (Distance(_CheckPoint[j].X, _CheckPoint[j].Y, Players[i].X, Players[i].Y) <= 30) and (Now - _Timer[i] >= 1.0/86400) then
 							if j <> High(_CheckPoint) then
 								_CheckPointPassed[i] := j+1
 							else begin
@@ -448,30 +448,27 @@ begin
 									DB_FinishQuery(DB_ID);
 								end;
 								
+								Players[i].ChangeTeam(Players[i].Team, TJoinSilent);
 								Players[i].SetVelocity(0, 0);
 								Players[i].Move(_CheckPoint[0].X, _CheckPoint[0].Y);
 								_CheckPointPassed[i] := 1;
 								_Timer[i] := Now;
 							end;
 					
-					if j+1 = _CheckPointPassed[i] then
-						Players[i].WorldText(j, IntToStr(j+1), 120, $00FF00, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)))
-					else
-						Players[i].WorldText(j, IntToStr(j+1), 120, $FF0000, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)));
+					if Ticks mod 15 = 0 then
+						if j+1 = _CheckPointPassed[i] then
+							Players[i].WorldText(j, IntToStr(j+1), 120, $00FF00, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)))
+						else
+							Players[i].WorldText(j, IntToStr(j+1), 120, $FF0000, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)));
 						
 				end;
 			
-			if Ticks mod 6 = 0 then
+			if Ticks mod 15 = 0 then
 				if (Players[i].KeyReload) and (_RKill[i]) then
 					if length(_CheckPoint) <= 1 then
 						Players[i].BigText(5, 'Checkpoints error', 120, $FF0000, 0.1, 320, 300)
-					else begin
-						_LapsPassed[i] := 0;
-						Players[i].SetVelocity(0, 0);
-						Players[i].Move(_CheckPoint[0].X, _CheckPoint[0].Y);
-						_CheckPointPassed[i] := 1;
-						_Timer[i] := Now;
-					end;
+					else
+						Players[i].Damage(i, 150);
 			
 			//1 SEC INTERVAL LOOP
 			if Ticks mod 60 = 0 then begin
@@ -560,6 +557,11 @@ if Player <> nil then begin//In-Game Admin
 	
 	if Command = '/delbugtime' then begin
 		if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Time < 1.0/86400;') = 0 then
+			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
+	end;
+	
+	if Command = '/delall' then begin
+		if DB_Update(DB_ID, 'DELETE FROM Scores;') = 0 then
 			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
 	end;
 	
@@ -784,6 +786,7 @@ begin
 		Player.WriteConsole('!v - Start vote for next map', COLOR_2);
 		Player.WriteConsole('!elite - Shows 10 best players', COLOR_2);
 		Player.WriteConsole('!top <map name> - Shows 3 best times of certain map', COLOR_2);
+		Player.WriteConsole('!top10 <map name> - Shows 10 best times of certain map', COLOR_2);
 		Player.WriteConsole('!lastcaps - Shows last 10 caps', COLOR_2);
 		Player.WriteConsole('!last10 <nickname> - Shows last 10 caps of certain player', COLOR_2);
 		Player.WriteConsole('!mlr - MapListReader commands', COLOR_2);
@@ -903,6 +906,56 @@ begin
 		end;
 	end;
 	
+	if Text = '!top10' then begin
+		Player.WriteConsole(Game.CurrentMap+' TOP10', COLOR_1);
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date LIMIT 10;') = 0 then
+			WriteLn('Error: '+DB_Error)
+		else begin
+			While DB_NextRow(DB_ID) <> 0 Do begin
+				Inc(PosCounter, 1);
+				
+				if PosCounter = 1 then
+					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+						
+				if PosCounter = 2 then
+					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					
+				if PosCounter = 3 then
+					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+				
+				if PosCounter > 3 then
+					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_1);
+				
+			end;
+			DB_FinishQuery(DB_ID);
+		end;
+	end;
+	
+	if (Copy(Text, 1, 7) = '!top10 ') and (Copy(Text, 8, Length(Text)) <> nil) then begin
+		Player.WriteConsole(Copy(Text, 8, Length(Text))+' TOP10', COLOR_1);
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Copy(Text, 8, Length(Text)))+''' ORDER BY Time, Date LIMIT 10;') = 0 then
+			WriteLn('Error: '+DB_Error)
+		else begin
+			While DB_NextRow(DB_ID) <> 0 Do begin
+				Inc(PosCounter, 1);
+				
+				if PosCounter = 1 then
+					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+						
+				if PosCounter = 2 then
+					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					
+				if PosCounter = 3 then
+					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+				
+				if PosCounter > 3 then
+					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_1);
+				
+			end;
+			DB_FinishQuery(DB_ID);
+		end;
+	end;
+	
 	if Text = '!lastcaps' then begin
 		Player.WriteConsole('Last 10 caps', COLOR_1);
 		if DB_Query(DB_ID, 'SELECT Account, Map, Date, Time FROM Scores ORDER BY Date DESC LIMIT 10;') = 0 then
@@ -955,15 +1008,11 @@ begin
 			begin
 				Player.WriteConsole('Welcome, Account with your nickname wasn''t found', COLOR_2);
 				Player.WriteConsole('Register it in order to save your scores, type /account <password>', COLOR_2);
+				Player.WriteConsole('Hold "Reload Key" to start running', $00FF00);
 				Player.WriteConsole('Read !help for more informations', COLOR_1);
 			end;
 		DB_FinishQuery(DB_ID);
 	end;
-end;
-
-procedure OnAfterRespawn(Player: TActivePlayer);
-begin
-	Player.WriteConsole('Hold "Reload Key" to reset the timer.', $00FF00);
 end;
 
 procedure OnLeave(Player: TActivePlayer; Kicked: Boolean);
@@ -1062,6 +1111,7 @@ begin
 		Victim.Health := 150;
 		Victim.BigText(5, 'Death', 120, $FF0000, 0.1, 320, 300);
 		if length(_CheckPoint) > 1 then begin
+			Victim.ChangeTeam(Victim.Team, TJoinSilent);
 			_LapsPassed[Victim.ID] := 0;
 			Victim.SetVelocity(0, 0);
 			Victim.Move(_CheckPoint[0].X, _CheckPoint[0].Y);
@@ -1070,6 +1120,14 @@ begin
 		end;
 	end else
 		Result := Damage;
+end;
+
+function OnBeforeRespawn(Player: TActivePlayer): TVector;
+begin
+	if length(_CheckPoint) > 1 then begin
+		Result.X := _CheckPoint[0].X;
+		Result.Y := _CheckPoint[0].Y;
+	end;
 end;
 
 procedure Init;
@@ -1102,8 +1160,8 @@ begin
 		Players[i].Team := 5;
 		Players[i].OnCommand := @OnPlayerCommand;
 		Players[i].OnSpeak := @OnPlayerSpeak;
-		Players[i].OnAfterRespawn := @OnAfterRespawn;
 		Players[i].OnDamage := @OnDamage;
+		Players[i].OnBeforeRespawn := @OnBeforeRespawn;
 	end;
 	
 	Game.OnAdminCommand := @OnAdminCommand;
