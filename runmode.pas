@@ -1,4 +1,4 @@
-//Run Mode 0.8 by Savage
+//Run Mode 0.9 by Savage
 
 {LIBDB}
 // =====================================
@@ -132,9 +132,10 @@ begin
 	if DB_Update(DB_ID, 'UPDATE Accounts SET Gold = 0, Silver = 0, Bronze = 0, NoMedal = 0, Points = 0;') = 0 then
 		WriteLn('Error: '+DB_Error);
 	
-	if DB_Query(DB_ID, 'SELECT Account, Map FROM Scores ORDER BY Map, Time;') = 0 then
+	if DB_Query(DB_ID, 'SELECT Account, Map FROM Scores ORDER BY Map, Time, Date;') = 0 then
 		WriteLn('Error: '+DB_Error)
-	else
+	else begin
+		DB_Update(DB_ID, 'BEGIN TRANSACTION;');
 		While DB_NextRow(DB_ID) <> 0 Do begin
 			
 			if MapName <> String(DB_GetString(DB_ID, 1)) then begin
@@ -161,6 +162,8 @@ begin
 					WriteLn('Error: '+DB_Error);
 					
 		end;
+		DB_Update(DB_ID, 'COMMIT;');
+	end;
 		
 	DB_FinishQuery(DB_ID);
 end;
@@ -191,7 +194,7 @@ begin
 	TempTable[6].Append('|Points');
 	TempTable[6].Append('');
 	
-	if DB_Query(DB_ID, 'SELECT Name, Gold, Silver, Bronze, NoMedal, Points FROM Accounts ORDER BY Points DESC LIMIT 10;') = 0 then
+	if DB_Query(DB_ID, 'SELECT Name, Gold, Silver, Bronze, NoMedal, Points FROM Accounts ORDER BY Points DESC LIMIT 20;') = 0 then
 		WriteLn('Error: '+DB_Error)
 	else
 		While DB_NextRow(DB_ID) <> 0 Do Begin
@@ -298,163 +301,27 @@ var
 	i: Byte;
 	j, PosCounter: Integer;
 	TempTime, TempTime2, Timer: TDateTime;
+	RunComplete: Boolean;
 begin
 	for i := 1 to 32 do
 		if Players[i].Active then begin
 			
 			if _ShowTimer[i] then
-				Players[i].BigText(3, ShowTime(Now - _Timer[i]), 180, $FFFFFF, 0.1, 320, 360);
+				Players[i].BigText(3, ShowTime(Now - _Timer[i])+#10+'Laps: '+IntToStr(_LapsPassed[i])+'/'+IntToStr(_Laps), 180, $FFFFFF, 0.1, 320, 360);
 			
-			if length(_CheckPoint) > 1 then
+			if length(_CheckPoint) > 1 then begin
 				for j := 0 to High(_CheckPoint) do begin
 					
-					if _Laps = 0 then
+					if _Laps = 0 then begin
 						if (_CheckPointPassed[i] <> 0) and (_CheckPointPassed[i] = j) and (Distance(_CheckPoint[j].X, _CheckPoint[j].Y, Players[i].X, Players[i].Y) <= 30) and (Now - _Timer[i] >= 1.0/86400) then
 							if j <> High(_CheckPoint) then
 								_CheckPointPassed[i] := j+1
-							else begin
-								if DB_Query(DB_ID, 'SELECT Name FROM Accounts WHERE Name = '''+EscapeApostrophe(Players[i].Name)+''' LIMIT 1;') = 0 then
-									WriteLn('Error: '+DB_Error)
-								else begin
-									
-									Timer := Now - _Timer[i];
-									
-									if DB_FirstRow(DB_ID) = 1 then begin //If account was found
-										TempTime := MapBestTime(Game.CurrentMap);
-										if TempTime = -1 then begin
-											
-											Players.WriteConsole('[1] First score by '+Players[i].Name+': '+ShowTime(Timer), $FFD700);
-											
-											if _LoggedIn[i] then begin
-												if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
-													WriteLn('Error: '+DB_Error);
-											end else
-												Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
-											
-										end else
-											begin
-												TempTime2 := PlayerBestTime(Players[i].Name, Game.CurrentMap);
-												
-												if TempTime2 = -1 then begin
-													
-													if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
-													WriteLn('Error: '+DB_Error);
-												
-													if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
-														WriteLn('Error: '+DB_Error)
-													else
-														While DB_NextRow(DB_ID) <> 0 Do begin
-															Inc(PosCounter, 1);
-															if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
-																break;
-														end;
-													
-													if PosCounter = 1 then
-														Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
-														
-													if PosCounter = 2 then
-														Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
-														
-													if PosCounter = 3 then
-														Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
-														
-													if PosCounter > 3 then
-														Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
-													
-													if not _LoggedIn[i] then begin
-														if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
-															WriteLn('Error: '+DB_Error);
-														Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
-													end;
-														
-												end else
-													if Timer >= TempTime2 then
-														Players.WriteConsole(ShowTime(Timer)+', Time was slower than '+Players[i].Name+'''s best by: '+ShowTime(Timer - TempTime2), COLOR_1)
-													else begin
-														
-														if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
-															WriteLn('Error: '+DB_Error);
-															
-														if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
-															WriteLn('Error: '+DB_Error);
-														
-														if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
-															WriteLn('Error: '+DB_Error)
-														else
-															While DB_NextRow(DB_ID) <> 0 Do begin
-																Inc(PosCounter, 1);
-																if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
-																	break;
-															end;
-														
-														if PosCounter = 1 then
-															Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
-															
-														if PosCounter = 2 then
-															Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
-															
-														if PosCounter = 3 then
-															Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
-															
-														if PosCounter > 3 then
-															Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
-														
-														if not _LoggedIn[i] then begin
-															if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
-																WriteLn('Error: '+DB_Error);
-															Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
-														end;
-														
-													end;
-											end;
-									end else
-										begin //If account wasn't found
-											TempTime := MapBestTime(Game.CurrentMap);
-											if TempTime = -1 then
-												Players.WriteConsole('[1] First score by '+Players[i].Name+': '+ShowTime(Timer), $FFD700)
-											else begin
-												
-												if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
-													WriteLn('Error: '+DB_Error);
-												
-												if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
-													WriteLn('Error: '+DB_Error)
-												else
-													While DB_NextRow(DB_ID) <> 0 Do begin
-														Inc(PosCounter, 1);
-														if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
-															break;
-													end;
-												
-												if PosCounter = 1 then
-													Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
-													
-												if PosCounter = 2 then
-													Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
-													
-												if PosCounter = 3 then
-													Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
-													
-												if PosCounter > 3 then
-													Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
-												
-												if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
-													WriteLn('Error: '+DB_Error);
-												
-											end;
-											Players.WriteConsole('Unregistered nickname: '+Players[i].Name+' - score wasn''t recorded', COLOR_1);
-										end;
-										
-									DB_FinishQuery(DB_ID);
-								end;
-								
-								Players[i].ChangeTeam(Players[i].Team, TJoinSilent);
-								Players[i].SetVelocity(0, 0);
-								Players[i].Move(_CheckPoint[0].X, _CheckPoint[0].Y);
-								_CheckPointPassed[i] := 1;
-								_Timer[i] := Now;
-							end;
-					
+							else
+								RunComplete := True;
+					end else
+						if (_CheckPointPassed[i] <> 0) and (_CheckPointPassed[i] = j) and (Distance(_CheckPoint[j].X, _CheckPoint[j].Y, Players[i].X, Players[i].Y) <= 30) and (Now - _Timer[i] >= 1.0/86400) then
+							_CheckPointPassed[i] := j+1;
+						
 					if Ticks mod 15 = 0 then
 						if j+1 = _CheckPointPassed[i] then
 							Players[i].WorldText(j, IntToStr(j+1), 120, $00FF00, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)))
@@ -462,6 +329,159 @@ begin
 							Players[i].WorldText(j, IntToStr(j+1), 120, $FF0000, 0.3, _CheckPoint[j].X+(30*(0-0.3)), _CheckPoint[j].Y+(160*(0-0.3)));
 						
 				end;
+				
+				if (_CheckPointPassed[i] = Length(_CheckPoint)) and (Distance(_CheckPoint[0].X, _CheckPoint[0].Y, Players[i].X, Players[i].Y) <= 30) then begin
+					Inc(_LapsPassed[i], 1);
+					if _LapsPassed[i] = _Laps then
+						RunComplete := True
+					else
+						_CheckPointPassed[i] := 1;
+				end;
+				
+			end;
+			
+			if RunComplete then begin
+				if DB_Query(DB_ID, 'SELECT Name FROM Accounts WHERE Name = '''+EscapeApostrophe(Players[i].Name)+''' LIMIT 1;') = 0 then
+					WriteLn('Error: '+DB_Error)
+				else begin
+					
+					Timer := Now - _Timer[i];
+					
+					if DB_FirstRow(DB_ID) = 1 then begin //If account was found
+						TempTime := MapBestTime(Game.CurrentMap);
+						if TempTime = -1 then begin
+							
+							Players.WriteConsole('[1] First score by '+Players[i].Name+': '+ShowTime(Timer), $FFD700);
+							
+							if _LoggedIn[i] then begin
+								if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
+									WriteLn('Error: '+DB_Error);
+							end else
+								Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
+							
+						end else
+							begin
+								TempTime2 := PlayerBestTime(Players[i].Name, Game.CurrentMap);
+								
+								if TempTime2 = -1 then begin
+									
+									if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
+									WriteLn('Error: '+DB_Error);
+								
+									if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
+										WriteLn('Error: '+DB_Error)
+									else
+										While DB_NextRow(DB_ID) <> 0 Do begin
+											Inc(PosCounter, 1);
+											if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
+												break;
+										end;
+									
+									if PosCounter = 1 then
+										Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
+										
+									if PosCounter = 2 then
+										Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
+										
+									if PosCounter = 3 then
+										Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
+										
+									if PosCounter > 3 then
+										Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
+									
+									if not _LoggedIn[i] then begin
+										if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
+											WriteLn('Error: '+DB_Error);
+										Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
+									end;
+										
+								end else
+									if Timer >= TempTime2 then
+										Players.WriteConsole(ShowTime(Timer)+', Time was slower than '+Players[i].Name+'''s best by: '+ShowTime(Timer - TempTime2), COLOR_1)
+									else begin
+										
+										if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
+											WriteLn('Error: '+DB_Error);
+											
+										if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
+											WriteLn('Error: '+DB_Error);
+										
+										if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
+											WriteLn('Error: '+DB_Error)
+										else
+											While DB_NextRow(DB_ID) <> 0 Do begin
+												Inc(PosCounter, 1);
+												if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
+													break;
+											end;
+										
+										if PosCounter = 1 then
+											Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
+											
+										if PosCounter = 2 then
+											Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
+											
+										if PosCounter = 3 then
+											Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
+											
+										if PosCounter > 3 then
+											Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: -'+ShowTime(Timer - TempTime2)+', Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
+										
+										if not _LoggedIn[i] then begin
+											if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
+												WriteLn('Error: '+DB_Error);
+											Players.WriteConsole('Player '+Players[i].Name+' isn''t logged in - score wasn''t recorded', COLOR_1);
+										end;
+										
+									end;
+							end;
+					end else
+						begin //If account wasn't found
+							TempTime := MapBestTime(Game.CurrentMap);
+							if TempTime = -1 then
+								Players.WriteConsole('[1] First score by '+Players[i].Name+': '+ShowTime(Timer), $FFD700)
+							else begin
+								
+								if DB_Update(DB_ID, 'INSERT INTO Scores(Account, Map, Date, Time) VALUES('''+EscapeApostrophe(Players[i].Name)+''', '''+EscapeApostrophe(Game.CurrentMap)+''', '+FloatToStr(Now)+', '+FloatToStr(Timer)+');') = 0 then //Add cap
+									WriteLn('Error: '+DB_Error);
+								
+								if DB_Query(DB_ID, 'SELECT Account FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date;') = 0 then //Find position
+									WriteLn('Error: '+DB_Error)
+								else
+									While DB_NextRow(DB_ID) <> 0 Do begin
+										Inc(PosCounter, 1);
+										if Players[i].Name = String(DB_GetString(DB_ID, 0)) then
+											break;
+									end;
+								
+								if PosCounter = 1 then
+									Players.WriteConsole('[1] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: -'+ShowTime(Timer - TempTime), $FFD700);
+									
+								if PosCounter = 2 then
+									Players.WriteConsole('[2] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $C0C0C0);
+									
+								if PosCounter = 3 then
+									Players.WriteConsole('[3] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), $F4A460);
+									
+								if PosCounter > 3 then
+									Players.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(Timer)+', '+Players[i].Name+'''s best time: Not found, Map''s best time: +'+ShowTime(Timer - TempTime), COLOR_1);
+								
+								if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Account = '''+EscapeApostrophe(Players[i].Name)+''' AND Map = '''+EscapeApostrophe(Game.CurrentMap)+''';') = 0 then //Del cap
+									WriteLn('Error: '+DB_Error);
+								
+							end;
+							Players.WriteConsole('Unregistered nickname: '+Players[i].Name+' - score wasn''t recorded', COLOR_1);
+						end;
+						
+					DB_FinishQuery(DB_ID);
+				end;
+			
+				Players[i].ChangeTeam(Players[i].Team, TJoinSilent);
+				_LapsPassed[i] := 0;
+				_CheckPointPassed[i] := 1;
+				_Timer[i] := Now;
+				RunComplete := False;
+			end;
 			
 			if Ticks mod 15 = 0 then
 				if (Players[i].KeyReload) and (_RKill[i]) then
@@ -487,9 +507,24 @@ end;
 
 function OnAdminCommand(Player: TActivePlayer; Command: string): boolean;
 var
-	i: Byte;
+	i, StrToIntConv: Byte;
+	TimeStart: TDateTime;
+	Ini: TIniFile;
 begin
 Result := False;
+
+	if Command = '/recountallstats' then begin
+		Players.WriteConsole('Recounting medals...', COLOR_1);
+		TimeStart  := Now;
+		RecountAllStats;
+		Players.WriteConsole('Done in '+ShowTime(Now - TimeStart), COLOR_1);
+	
+		Players.WriteConsole('Generating elite list...', COLOR_2);
+		TimeStart  := Now;
+		GenerateEliteList;
+		Players.WriteConsole('Done in '+ShowTime(Now - TimeStart), COLOR_2);
+	end;
+
 if Player <> nil then begin//In-Game Admin
 
 	if (Copy(Command, 1, 8) = '/delacc ') and (Copy(Command, 9, Length(Command)) <> nil) then
@@ -516,7 +551,69 @@ if Player <> nil then begin//In-Game Admin
 			DB_FinishQuery(DB_ID);
 		end;
 	
-	//if Command = '/deltop1' then
+	if (Copy(Command, 1, 7) = '/delid ') and (Copy(Command, 8, Length(Command)) <> nil) then
+		if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Id = '''+EscapeApostrophe(Copy(Command, 8, Length(Command)))+''';') = 0 then
+			Player.WriteConsole('Error: '+DB_Error, COLOR_1)
+		else
+			Player.WriteConsole('Score with Id '+Copy(Command, 8, Length(Command))+' has been deleted', COLOR_1);
+	
+	if Command = '/cpadd' then begin
+		for i := 1 to 32 do begin
+			_LapsPassed[i] := 0;
+			_CheckPointPassed[i] := 0;
+		end;
+		SetLength(_CheckPoint, Length(_CheckPoint)+1);
+		_CheckPoint[High(_CheckPoint)].X := Player.X;
+		_CheckPoint[High(_CheckPoint)].Y := Player.Y;
+	end;
+	
+	if Command = '/cpdel' then
+		if High(_CheckPoint) <> -1 then begin
+			for i := 1 to 32 do begin
+				_LapsPassed[i] := 0;
+				_CheckPointPassed[i] := 0;
+			end;
+			SetLength(_CheckPoint, High(_CheckPoint));
+		end else
+			Player.WriteConsole('All checkpoints has been deleted', $FF0000);
+	
+	if (Copy(Command, 1, 8) = '/cplaps ') and (Length(Command)>8) then begin
+		Delete(Command, 1, 8);
+		try
+			StrToIntConv := StrToInt(Command);
+		except
+			Player.WriteConsole('Invalid integer', $FF0000);
+			exit;
+		end;
+		
+		for i := 1 to 32 do begin
+			_LapsPassed[i] := 0;
+			_CheckPointPassed[i] := 0;
+		end;
+		
+		_Laps := StrToIntConv;
+		
+	end;
+	
+	if Command = '/cpsave' then
+		if length(_CheckPoint) <= 1 then
+			Player.WriteConsole('Not enough checkpoints', $FF0000)
+		else begin
+			Ini := File.CreateINI('~/maps_config.ini');
+			Ini.CaseSensitive := True;
+			
+			if Ini.SectionExists(Game.CurrentMap) then
+				Ini.EraseSection(Game.CurrentMap);
+			
+			for i := 0 to High(_CheckPoint) do begin
+				Ini.WriteFloat(Game.CurrentMap, IntToStr(i)+'X', _CheckPoint[i].X);
+				Ini.WriteFloat(Game.CurrentMap, IntToStr(i)+'Y', _CheckPoint[i].Y);
+			end;
+			
+			Ini.WriteInteger(Game.CurrentMap, 'Laps', _Laps);
+			
+			Ini.Free;
+		end;
 	
 	if Command = '/lastcaps' then begin
 		Player.WriteConsole('Last 20 caps', COLOR_1);
@@ -550,9 +647,11 @@ if Player <> nil then begin//In-Game Admin
 		DB_FinishQuery(DB_ID);
 	end;
 	
-	if Command = '/test2' then begin
-		RecountAllStats;
-		GenerateEliteList;
+	if Command = '/changenick' then begin
+		if DB_Update(DB_ID, 'UPDATE Accounts SET Name = ''~>2Fast|`HaSte.|'' WHERE Name = ''bp.Energy'';') = 0 then
+			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
+		if DB_Update(DB_ID, 'UPDATE Scores SET Account = ''~>2Fast|`HaSte.|'' WHERE Account = ''bp.Energy'';') = 0 then
+			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
 	end;
 	
 	if Command = '/delbugtime' then begin
@@ -574,8 +673,8 @@ if Player <> nil then begin//In-Game Admin
 		DB_FinishQuery(DB_ID);
 	end;
 	
-	if Command = '/delash' then begin
-		if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Map = ''ctf_Ash'';') = 0 then
+	if Command = '/delarena2' then begin
+		if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Map = ''Arena2'';') = 0 then
 			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
 	end;
 	
@@ -615,6 +714,12 @@ begin//TCP Admin
 				
 			DB_FinishQuery(DB_ID);
 		end;
+	
+	if (Copy(Command, 1, 7) = '/delid ') and (Copy(Command, 8, Length(Command)) <> nil) then
+		if DB_Update(DB_ID, 'DELETE FROM Scores WHERE Id = '''+EscapeApostrophe(Copy(Command, 8, Length(Command)))+''';') = 0 then
+			WriteLn('Error: '+DB_Error)
+		else
+			WriteLn('Score with Id '+Copy(Command, 8, Length(Command))+' has been deleted');
 	
 end;
 end;
@@ -864,20 +969,20 @@ begin
 	
 	if Text = '!top' then begin
 		Players.WriteConsole(Game.CurrentMap+' TOP3', COLOR_1);
-		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date LIMIT 3;') = 0 then
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date LIMIT 3;') = 0 then
 			WriteLn('Error: '+DB_Error)
 		else begin
 			While DB_NextRow(DB_ID) <> 0 Do begin
 				Inc(PosCounter, 1);
 				
 				if PosCounter = 1 then
-					Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+					Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
 						
 				if PosCounter = 2 then
-					Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
 					
 				if PosCounter = 3 then
-					Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+					Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
 				
 			end;
 			DB_FinishQuery(DB_ID);
@@ -886,20 +991,20 @@ begin
 	
 	if (Copy(Text, 1, 5) = '!top ') and (Copy(Text, 6, Length(Text)) <> nil) then begin
 		Players.WriteConsole(Copy(Text, 6, Length(Text))+' TOP3', COLOR_1);
-		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Copy(Text, 6, Length(Text)))+''' ORDER BY Time, Date LIMIT 3;') = 0 then
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Copy(Text, 6, Length(Text)))+''' ORDER BY Time, Date LIMIT 3;') = 0 then
 			WriteLn('Error: '+DB_Error)
 		else begin
 			While DB_NextRow(DB_ID) <> 0 Do begin
 				Inc(PosCounter, 1);
 				
 				if PosCounter = 1 then
-					Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+					Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
 						
 				if PosCounter = 2 then
-					Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
 					
 				if PosCounter = 3 then
-					Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+					Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
 				
 			end;
 			DB_FinishQuery(DB_ID);
@@ -908,23 +1013,23 @@ begin
 	
 	if Text = '!top10' then begin
 		Player.WriteConsole(Game.CurrentMap+' TOP10', COLOR_1);
-		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date LIMIT 10;') = 0 then
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' ORDER BY Time, Date LIMIT 10;') = 0 then
 			WriteLn('Error: '+DB_Error)
 		else begin
 			While DB_NextRow(DB_ID) <> 0 Do begin
 				Inc(PosCounter, 1);
 				
 				if PosCounter = 1 then
-					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
 						
 				if PosCounter = 2 then
-					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
 					
 				if PosCounter = 3 then
-					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
 				
 				if PosCounter > 3 then
-					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_1);
+					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', COLOR_1);
 				
 			end;
 			DB_FinishQuery(DB_ID);
@@ -933,23 +1038,23 @@ begin
 	
 	if (Copy(Text, 1, 7) = '!top10 ') and (Copy(Text, 8, Length(Text)) <> nil) then begin
 		Player.WriteConsole(Copy(Text, 8, Length(Text))+' TOP10', COLOR_1);
-		if DB_Query(DB_ID, 'SELECT Account, Date, Time FROM Scores WHERE Map = '''+EscapeApostrophe(Copy(Text, 8, Length(Text)))+''' ORDER BY Time, Date LIMIT 10;') = 0 then
+		if DB_Query(DB_ID, 'SELECT Account, Date, Time, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Copy(Text, 8, Length(Text)))+''' ORDER BY Time, Date LIMIT 10;') = 0 then
 			WriteLn('Error: '+DB_Error)
 		else begin
 			While DB_NextRow(DB_ID) <> 0 Do begin
 				Inc(PosCounter, 1);
 				
 				if PosCounter = 1 then
-					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $FFD700);
+					Player.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
 						
 				if PosCounter = 2 then
-					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $C0C0C0);
+					Player.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
 					
 				if PosCounter = 3 then
-					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), $F4A460);
+					Player.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
 				
 				if PosCounter > 3 then
-					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_1);
+					Player.WriteConsole('['+IntToStr(PosCounter)+'] '+ShowTime(DB_GetDouble(DB_ID, 2))+' by '+DB_GetString(DB_ID, 0)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1))+' ['+DB_GetString(DB_ID, 3)+']', COLOR_1);
 				
 			end;
 			DB_FinishQuery(DB_ID);
@@ -1032,6 +1137,8 @@ begin
 		_LapsPassed[i] := 0;
 		_CheckPointPassed[i] := 0;
 	end;
+	SetLength(_CheckPoint, 0);
+	_Laps := 0;
 	
 	Players.WriteConsole('Recounting medals...', COLOR_1);
 	TimeStart  := Now;
@@ -1047,13 +1154,35 @@ end;
 procedure OnAfterMapChange(Next: string);
 var
 	Ini: TIniFile;
-	i: Word;
+	TempStrL: TStringList;
+	i: Integer;
 	SpawnATeam, SpawnAFlag, SpawnBFlag: Boolean;
 begin
 	Ini := File.CreateINI('~/maps_config.ini');
 	Ini.CaseSensitive := True;
 	
 	if Ini.SectionExists(Game.CurrentMap) then begin
+		
+		Players.WriteConsole('Map''s checkpoints found - loading...', COLOR_1);
+		
+		TempStrL := File.CreateStringList;
+		Ini.ReadSection(Game.CurrentMap, TempStrL);
+		
+		SetLength(_CheckPoint, (TempStrL.Count-1)/2);
+		
+		for i := 0 to High(_CheckPoint) do begin
+			_CheckPoint[i].X := Ini.ReadFloat(Game.CurrentMap, IntToStr(i)+'X', 0);
+			_CheckPoint[i].Y := Ini.ReadFloat(Game.CurrentMap, IntToStr(i)+'Y', 0);
+		end;
+		
+		_Laps := Ini.ReadInteger(Game.CurrentMap, 'Laps', 0);
+		
+		if _Laps < 1 then
+			Players.WriteConsole('Checkpoints loaded - Sprint', COLOR_2)
+		else
+			Players.WriteConsole('Checkpoints loaded - Circuit', COLOR_2);
+		
+		TempStrL.Free;
 		
 	end else
 		begin
@@ -1095,7 +1224,7 @@ begin
 				Players.WriteConsole('Alpha Flag spawn is missing', COLOR_1);
 			
 			if SpawnATeam and SpawnBFlag and SpawnAFlag then begin
-				_Laps := 0
+				_Laps := 0;
 				Players.WriteConsole('Default checkpoints loaded - Sprint', COLOR_2);
 			end else
 				SetLength(_CheckPoint, 0);
@@ -1113,8 +1242,6 @@ begin
 		if length(_CheckPoint) > 1 then begin
 			Victim.ChangeTeam(Victim.Team, TJoinSilent);
 			_LapsPassed[Victim.ID] := 0;
-			Victim.SetVelocity(0, 0);
-			Victim.Move(_CheckPoint[0].X, _CheckPoint[0].Y);
 			_CheckPointPassed[Victim.ID] := 1;
 			_Timer[Victim.ID] := Now;
 		end;
@@ -1122,12 +1249,10 @@ begin
 		Result := Damage;
 end;
 
-function OnBeforeRespawn(Player: TActivePlayer): TVector;
+procedure OnAfterRespawn(Player: TActivePlayer);
 begin
-	if length(_CheckPoint) > 1 then begin
-		Result.X := _CheckPoint[0].X;
-		Result.Y := _CheckPoint[0].Y;
-	end;
+	if length(_CheckPoint) > 1 then
+		Player.Move(_CheckPoint[0].X, _CheckPoint[0].Y);
 end;
 
 procedure Init;
@@ -1161,7 +1286,7 @@ begin
 		Players[i].OnCommand := @OnPlayerCommand;
 		Players[i].OnSpeak := @OnPlayerSpeak;
 		Players[i].OnDamage := @OnDamage;
-		Players[i].OnBeforeRespawn := @OnBeforeRespawn;
+		Players[i].OnAfterRespawn := @OnAfterRespawn;
 	end;
 	
 	Game.OnAdminCommand := @OnAdminCommand;
