@@ -1,4 +1,4 @@
-//Run Mode 1.0 by Savage
+//Run Mode 1.1 by Savage
 
 {LIBDB}
 // =====================================
@@ -330,10 +330,16 @@ begin
 	end;
 	
 	for i := 1 to 32 do
-		if Players[i].Active then begin
+		if Players[i].Alive then begin
 			
 			if Ticks mod 6 = 0 then
 				if Length(_Record[i]) > 0 then begin
+					if Distance(_Record[i][High(_Record[i])].X, _Record[i][High(_Record[i])].Y, Players[i].X, Players[i].Y) >= 100 then begin
+						Players[i].Damage(i, 150);
+						Players.WriteConsole('Offmap bug or teleport cheat detected, player '+Players[i].Name+' has been killed', $FF0000);
+						exit;
+					end;
+					
 					SetLength(_Record[i], Length(_Record[i])+1);
 					_Record[i][High(_Record[i])].X := Players[i].X;
 					_Record[i][High(_Record[i])].Y := Players[i].Y;
@@ -579,18 +585,12 @@ begin
 						
 					DB_FinishQuery(DB_ID);
 				end;
-			
-				Players[i].ChangeTeam(Players[i].Team, TJoinSilent);
-				SetLength(_Record[i], 1);
-				_Record[i][0].X := Players[i].X;
-				_Record[i][0].Y := Players[i].Y;
-				_LapsPassed[i] := 0;
-				_CheckPointPassed[i] := 1;
-				_Timer[i] := Now;
+				
+				Players[i].Damage(i, 150);
 				RunComplete := False;
 			end;
 			
-			if Ticks mod 12 = 0 then
+			if Ticks mod 3 = 0 then
 				if (Players[i].KeyReload) and (_RKill[i]) then
 					if length(_CheckPoint) <= 1 then
 						Players[i].BigText(5, 'Checkpoints error', 120, $FF0000, 0.1, 320, 300)
@@ -1053,7 +1053,7 @@ begin
 		Player.WriteConsole('!whois - Shows connected admins', COLOR_2);
 		Player.WriteConsole('!admin/nick - Call connected TCP admin', COLOR_2);
 		Player.WriteConsole('!v - Start vote for next map', COLOR_2);
-		Player.WriteConsole('!elite - Shows 10 best players', COLOR_2);
+		Player.WriteConsole('!elite - Shows 20 best players', COLOR_2);
 		Player.WriteConsole('!top <map name> - Shows 3 best times of certain map', COLOR_2);
 		Player.WriteConsole('!top10 <map name> - Shows 10 best times of certain map', COLOR_2);
 		Player.WriteConsole('!lastcaps - Shows last 10 caps', COLOR_2);
@@ -1293,20 +1293,13 @@ procedure OnLeave(Player: TActivePlayer; Kicked: Boolean);
 begin
 	_ShowTimer[Player.ID] := FALSE;
 	_LoggedIn[Player.ID] := FALSE;
-	_LapsPassed[Player.ID] := 0;
-	_CheckPointPassed[Player.ID] := 0;
 	SetLength(_Record[Player.ID], 0);
 end;
 
 procedure OnBeforeMapChange(Next: String);
 var
 	TimeStart: TDateTime;
-	i: Byte;
 begin
-	for i := 1 to 32 do begin
-		_LapsPassed[i] := 0;
-		_CheckPointPassed[i] := 0;
-	end;
 	SetLength(_CheckPoint, 0);
 	_Laps := 0;
 	
@@ -1406,29 +1399,21 @@ end;
 
 function OnDamage(Shooter, Victim: TActivePlayer; Damage: Single; BulletId: Byte): Single;
 begin
-	if (Victim.Health - Damage) <= 0 then begin
-		Victim.Health := 150;
-		Victim.BigText(5, 'Death', 120, $FF0000, 0.1, 320, 300);
-		if length(_CheckPoint) > 1 then begin
-			Victim.ChangeTeam(Victim.Team, TJoinSilent);
-			SetLength(_Record[Victim.ID], 1);
-			_Record[Victim.ID][0].X := Victim.X;
-			_Record[Victim.ID][0].Y := Victim.Y;
-			_LapsPassed[Victim.ID] := 0;
-			_CheckPointPassed[Victim.ID] := 1;
-			_Timer[Victim.ID] := Now;
-		end;
-	end else
-		Result := Damage;
+	if (BulletId = 255) or (Shooter.ID = Victim.ID) then
+		Result := Damage
+	else
+		Result := 0;
 end;
 
 procedure OnAfterRespawn(Player: TActivePlayer);
 begin
-	SetLength(_Record[Player.ID], 0);
 	if length(_CheckPoint) > 1 then begin
 		Player.Move(_CheckPoint[0].X, _CheckPoint[0].Y);
+		SetLength(_Record[Player.ID], 1);
+		_Record[Player.ID][0].X := Player.X;
+		_Record[Player.ID][0].Y := Player.Y;
 		_LapsPassed[Player.ID] := 0;
-		_CheckPointPassed[Player.ID] := 0;
+		_CheckPointPassed[Player.ID] := 1;
 		_Timer[Player.ID] := Now;
 	end;
 end;
