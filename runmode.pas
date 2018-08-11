@@ -1,4 +1,4 @@
-//Run Mode 1.5 by Savage
+//Run Mode 1.7 by Savage
 
 {LIBDB}
 // =====================================
@@ -106,12 +106,11 @@ var
 	_ReplayTime, _WorldTextLoop: Integer;
 	_LapsPassed, _CheckPointPassed: array[1..32] of Byte;
 	_Timer: array[1..32] of TDateTime;
-	_ShowTimer, _RKill, _LoggedIn: array[1..32] of Boolean;
+	_ShowTimer, _RKill, _LoggedIn, _JustDied: array[1..32] of Boolean;
 	_EliteList: TStringList;
 	_Record: array[1..32] of array of tRecord;
 	_Replay: array of tRecord;
 	_ScoreId: String;
-	_FakeRespawnTime: array[1..32] of Integer;
 	
 function EscapeApostrophe(Source: String): String;
 begin
@@ -133,7 +132,7 @@ begin
 	end;
 end;
 
-procedure RecountAllStats;
+{procedure RecountAllStats;
 var
 	PosCounter: Integer;
 	MapName: String;
@@ -170,6 +169,78 @@ begin
 				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 1 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
 					WriteLn('Error: '+DB_Error);
 					
+		end;
+		DB_Update(DB_ID, 'COMMIT;');
+	end;
+		
+	DB_FinishQuery(DB_ID);
+end;}
+
+procedure RecountAllStats;
+var
+	PosCounter: Integer;
+	MapName: String;
+begin
+	if DB_Update(DB_ID, 'UPDATE Accounts SET Gold = 0, Silver = 0, Bronze = 0, NoMedal = 0, Points = 0;') = 0 then
+		WriteLn('Error: '+DB_Error);
+	
+	if DB_Query(DB_ID, 'SELECT Account, Map FROM Scores ORDER BY Map, Time, Date;') = 0 then
+		WriteLn('Error: '+DB_Error)
+	else begin
+		DB_Update(DB_ID, 'BEGIN TRANSACTION;');
+		While DB_NextRow(DB_ID) <> 0 Do begin
+			
+			if MapName <> String(DB_GetString(DB_ID, 1)) then begin
+				MapName := DB_GetString(DB_ID, 1);
+				PosCounter := 0;
+			end;
+			
+			Inc(PosCounter, 1);
+			
+			if PosCounter = 1 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET Gold = Gold + 1, Points = Points + 25 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
+			if PosCounter = 2 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET Silver = Silver + 1, Points = Points + 20 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
+			if PosCounter = 3 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET Bronze = Bronze + 1, Points = Points + 15 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
+			if PosCounter = 4 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 10 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+					
+			if PosCounter = 5 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 7 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
+			if PosCounter = 6 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 5 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+					
+			if PosCounter = 7 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 4 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+					
+			if PosCounter = 8 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 3 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+					
+			if PosCounter = 9 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 2 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+					
+			if PosCounter = 10 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1, Points = Points + 1 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
+			if PosCounter > 10 then
+				if DB_Update(DB_ID, 'UPDATE Accounts SET NoMedal = NoMedal + 1 WHERE Name = '''+EscapeApostrophe(DB_GetString(DB_ID, 0))+''';') = 0 then
+					WriteLn('Error: '+DB_Error);
+			
 		end;
 		DB_Update(DB_ID, 'COMMIT;');
 	end;
@@ -336,11 +407,11 @@ begin
 			if Ticks mod 6 = 0 then
 				if Players[i].Alive then
 					if Length(_Record[i]) > 0 then begin
-						{if Distance(_Record[i][High(_Record[i])].X, _Record[i][High(_Record[i])].Y, Players[i].X, Players[i].Y) >= 150 then begin
+						if Distance(_Record[i][High(_Record[i])].X, _Record[i][High(_Record[i])].Y, Players[i].X, Players[i].Y) >= 200 then begin
 							Players[i].Damage(i, 150);
-							Players.WriteConsole('Offmap bug or teleport cheat detected, player '+Players[i].Name+' has been killed', $FF0000);
+							Players.WriteConsole('Offmap bug, lag or teleport cheat detected, player '+Players[i].Name+' has been killed', $FF0000);
 							exit;
-						end;}
+						end;
 						
 						SetLength(_Record[i], Length(_Record[i])+1);
 						_Record[i][High(_Record[i])].X := Players[i].X;
@@ -348,7 +419,7 @@ begin
 					end;
 			
 			if _ShowTimer[i] then
-				Players[i].BigText(3, ShowTime(Now - _Timer[i])+#10+'Laps: '+IntToStr(_LapsPassed[i])+'/'+IntToStr(_Laps), 180, $FFFFFF, 0.1, 320, 360);
+				Players[i].BigText(3, ShowTime(Now - _Timer[i])+#10+'Laps: '+IntToStr(_LapsPassed[i])+'/'+IntToStr(_Laps), 120, $FFFFFF, 0.1, 320, 360);
 			
 			if length(_CheckPoint) > 1 then begin
 				for j := 0 to High(_CheckPoint) do begin
@@ -623,30 +694,15 @@ begin
 					else
 						Players[i].Damage(i, 150);
 			
-			if Players[i].Alive then
-				if _FakeRespawnTime[i] > 0 then begin
-					Dec(_FakeRespawnTime[i], 1);
-					Players[i].BigText(6, 'Respawn '+IntToStr(_FakeRespawnTime[i]), 120, $FFFFFF, 0.1, 320, 0);
-					
-					if _FakeRespawnTime[i] = 0 then
-						if length(_CheckPoint) > 1 then begin
-							Players[i].SetVelocity(0, 0);
-							Players[i].Move(_CheckPoint[0].X, _CheckPoint[0].Y);
-							SetLength(_Record[i], 1);
-							_Record[i][0].X := Players[i].X;
-							_Record[i][0].Y := Players[i].Y;
-							_LapsPassed[i] := 0;
-							_CheckPointPassed[i] := 1;
-							_Timer[i] := Now;
-						end else
-							Players[i].BigText(5, 'Checkpoints error', 120, $FF0000, 0.1, 320, 300);
-				end;
-			
 			//1 SEC INTERVAL LOOP
 			if Ticks mod 60 = 0 then begin
 				
 				if not _LoggedIn[i] then
-					Players[i].BigText(4, 'Not logged in', 180, $FF0000, 0.1, 320, 240);
+					Players[i].BigText(4, 'Not logged in', 120, $FF0000, 0.1, 320, 240);
+				
+				if Players[i].Alive then
+					if _CheckPointPassed[i] = 0 then
+						Players[i].BigText(6, 'Press "Reload Key" to start', 120, COLOR_1, 0.1, 320, 270);
 				
 			end;
 			//END OF 1 SEC INTERVAL LOOP
@@ -891,7 +947,7 @@ if Player <> nil then begin//In-Game Admin
 		
 	if Command = '/disttest' then begin
 		Players.WorldText(100, '.', 180, $FF0000, 0.15, Player.X, Player.Y);
-		Players.WorldText(101, '.', 180, $00FF00, 0.15, Player.X+40, Player.Y);
+		Players.WorldText(101, '.', 180, $00FF00, 0.15, Player.X+200, Player.Y);
 	end;
 	
 	if Command = '/delaero' then begin
@@ -1320,7 +1376,7 @@ begin
 	end;
 	
 	if Text = '!elite' then begin
-		Player.WriteConsole('Points: Gold-12, Silver-6, Bronze-3, NoMedal-1', COLOR_1);
+		Player.WriteConsole('Points: Gold-25, Silver-20, Bronze-15, UpTo10th-10, 7, 5, 4, 3, 2, 1', COLOR_1);
 		for PosCounter := 0 to _EliteList.Count-1 do
 			Player.WriteConsole(_EliteList[PosCounter], COLOR_2);
 	end;
@@ -1371,6 +1427,7 @@ end;
 procedure OnJoinSpec(Player: TActivePlayer; Team: TTeam);
 begin
 	SetLength(_Record[Player.ID], 0);
+	_JustDied[Player.ID] := False;
 end;
 
 procedure OnLeave(Player: TActivePlayer; Kicked: Boolean);
@@ -1378,6 +1435,7 @@ begin
 	_ShowTimer[Player.ID] := FALSE;
 	_LoggedIn[Player.ID] := FALSE;
 	SetLength(_Record[Player.ID], 0);
+	_JustDied[Player.ID] := False;
 end;
 
 procedure OnBeforeMapChange(Next: String);
@@ -1494,12 +1552,38 @@ begin
 		Result := 0;
 end;
 
+procedure OnKill(Killer, Victim: TActivePlayer; BulletId: Byte);
+begin
+	_JustDied[Victim.ID] := True;
+end;
+
+function OnBeforeRespawn(Player: TActivePlayer): TVector;
+begin
+	if length(_CheckPoint) > 1 then begin
+		Result.X := _CheckPoint[0].X;
+		Result.Y := _CheckPoint[0].Y;
+	end;
+end;
+
 procedure OnAfterRespawn(Player: TActivePlayer);
 begin
-	_FakeRespawnTime[Player.ID] := 10;
-	SetLength(_Record[Player.ID], 0);
-	_LapsPassed[Player.ID] := 0;
-	_CheckPointPassed[Player.ID] := 0;
+	if length(_CheckPoint) > 1 then begin
+		if _JustDied[Player.ID] then begin
+			SetLength(_Record[Player.ID], 1);
+			_Record[Player.ID][0].X := Player.X;
+			_Record[Player.ID][0].Y := Player.Y;
+			_LapsPassed[Player.ID] := 0;
+			_CheckPointPassed[Player.ID] := 1;
+			_Timer[Player.ID] := Now;
+			_JustDied[Player.ID] := False;
+		end else
+			begin
+				SetLength(_Record[Player.ID], 0);
+				_LapsPassed[Player.ID] := 0;
+				_CheckPointPassed[Player.ID] := 0;
+			end;
+	end else
+		Player.BigText(5, 'Checkpoints error', 120, $FF0000, 0.1, 320, 300);
 end;
 
 procedure Init;
@@ -1533,6 +1617,8 @@ begin
 		Players[i].OnCommand := @OnPlayerCommand;
 		Players[i].OnSpeak := @OnPlayerSpeak;
 		Players[i].OnDamage := @OnDamage;
+		Players[i].OnKill := @OnKill;
+		Players[i].OnBeforeRespawn := @OnBeforeRespawn;
 		Players[i].OnAfterRespawn := @OnAfterRespawn;
 	end;
 	
