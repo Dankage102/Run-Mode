@@ -1,4 +1,4 @@
-//Run Mode 1.7 by Savage
+//Run Mode 1.8 by Savage
 
 {LIBDB}
 // =====================================
@@ -132,6 +132,7 @@ begin
 	end;
 end;
 
+//CLIMB/RUNMODE
 {procedure RecountAllStats;
 var
 	PosCounter: Integer;
@@ -145,6 +146,9 @@ begin
 	else begin
 		DB_Update(DB_ID, 'BEGIN TRANSACTION;');
 		While DB_NextRow(DB_ID) <> 0 Do begin
+			
+			if Game.MapsList.GetMapIdByName(DB_GetString(DB_ID, 1)) = -1 then//Do not count maps that are not in maplist
+				Continue;
 			
 			if MapName <> String(DB_GetString(DB_ID, 1)) then begin
 				MapName := DB_GetString(DB_ID, 1);
@@ -176,6 +180,7 @@ begin
 	DB_FinishQuery(DB_ID);
 end;}
 
+//RUNMODE/CLIMB
 procedure RecountAllStats;
 var
 	PosCounter: Integer;
@@ -189,6 +194,9 @@ begin
 	else begin
 		DB_Update(DB_ID, 'BEGIN TRANSACTION;');
 		While DB_NextRow(DB_ID) <> 0 Do begin
+			
+			if Game.MapsList.GetMapIdByName(DB_GetString(DB_ID, 1)) = -1 then//Do not count maps that are not in maplist
+				Continue;
 			
 			if MapName <> String(DB_GetString(DB_ID, 1)) then begin
 				MapName := DB_GetString(DB_ID, 1);
@@ -736,7 +744,29 @@ Result := False;
 	end;
 
 if Player <> nil then begin//In-Game Admin
-
+	
+	if Command = '/admcmds' then begin
+		Player.WriteConsole('Commands for admins:', $FFFF00);
+		Player.WriteConsole('RunMode:', COLOR_1);
+		Player.WriteConsole('/recountallstats - Recounts all medals and creates new elite list', COLOR_2);
+		Player.WriteConsole('/delacc <name> - Deletes certain account and it''s replays', COLOR_2);
+		Player.WriteConsole('/delid <id> - Deletes certain score and it''s replay', COLOR_2);
+		Player.WriteConsole('/cpadd - Creates new checkpoint', COLOR_2);
+		Player.WriteConsole('/cpdel - Deletes last checkpoint', COLOR_2);
+		Player.WriteConsole('/cplaps <amount> - Sets amount of laps', COLOR_2);
+		Player.WriteConsole('/cpsave - Saves current checkpoints setting', COLOR_2);
+		Player.WriteConsole('/replay <id> - Replays certain score', COLOR_2);
+		Player.WriteConsole('/replaystop - Stops current replay', COLOR_2);
+		Player.WriteConsole('PlayersDB:', COLOR_1);
+		Player.WriteConsole('/checkid <playerid(1-32)> - Check all nicks and entries for certain hwid', COLOR_2);
+		Player.WriteConsole('/checknick <nick> - Check all hwids and entries for certain nick', COLOR_2);
+		Player.WriteConsole('/checkhw <hwid> - Check all nicks and entries for certain hwid', COLOR_2);
+		Player.WriteConsole('MapListReader:', COLOR_1);
+		Player.WriteConsole('/createsortedmaplist - Create sorted MapList if current one is outdated', COLOR_2);
+		Player.WriteConsole('/addmap <map name> - Add map to MapList (Default Soldat command)', COLOR_2);
+		Player.WriteConsole('/delmap <map name> - Remove map from MapList (Default Soldat command)', COLOR_2);
+	end;
+	
 	if (Copy(Command, 1, 8) = '/delacc ') and (Copy(Command, 9, Length(Command)) <> nil) then
 		if DB_Query(DB_ID, 'SELECT Name FROM Accounts WHERE Name = '''+EscapeApostrophe(Copy(Command, 9, Length(Command)))+''' LIMIT 1;') <> 0 then begin
 		
@@ -920,6 +950,11 @@ if Player <> nil then begin//In-Game Admin
 		if DB_Update(DB_ID, 'UPDATE Accounts SET Name = ''~>2Fast|`HaSte.|'' WHERE Name = ''bp.Energy'';') = 0 then
 			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
 		if DB_Update(DB_ID, 'UPDATE Scores SET Account = ''~>2Fast|`HaSte.|'' WHERE Account = ''bp.Energy'';') = 0 then
+			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
+	end;
+	
+	if Command = '/changemap' then begin
+		if DB_Update(DB_ID, 'UPDATE Scores SET Map = ''s1_claustro'' WHERE Map = ''l1_claustro'';') = 0 then
 			Player.WriteConsole('Error: '+DB_Error, COLOR_1);
 	end;
 	
@@ -1193,6 +1228,7 @@ begin
 		Player.WriteConsole('!whois - Shows connected admins', COLOR_2);
 		Player.WriteConsole('!admin/nick - Call connected TCP admin', COLOR_2);
 		Player.WriteConsole('!v - Start vote for next map', COLOR_2);
+		Player.WriteConsole('!ultv - Ultimate Vote commands', COLOR_2);
 		Player.WriteConsole('!elite - Shows 20 best players', COLOR_2);
 		Player.WriteConsole('!top <map name> - Shows 3 best times of certain map', COLOR_2);
 		Player.WriteConsole('!top10 <map name> - Shows 10 best times of certain map', COLOR_2);
@@ -1208,7 +1244,19 @@ begin
 		Player.WriteConsole('/roff - Disable "Reload Key" function', COLOR_2);
 		Player.WriteConsole('/account <password> - Create an account', COLOR_2);
 		Player.WriteConsole('/login <password> - Login to your account', COLOR_2);
-		Player.WriteConsole('/thief <id> <password> - kick the player who''s taking your nickname', COLOR_2);
+		Player.WriteConsole('/thief <id> <password> - Kick the player who''s taking your nickname', COLOR_2);
+		Player.WriteConsole('/admcmds - Commands for admins', $FFFF00);
+	end;
+	
+	if Text = '!ultv' then begin
+		Player.WriteConsole('Ultimate Vote commands:', COLOR_1);
+		Player.WriteConsole('!map - Shows previous, current and next map name', COLOR_2);
+		Player.WriteConsole('/votemap <mapname> - Starts vote for certain map', COLOR_2);
+		Player.WriteConsole('/votekick <playerid> - Starts vote to ban certain player for 1 hour', COLOR_2);
+		Player.WriteConsole('/voteres - Starts vote to restart current map', COLOR_2);
+		Player.WriteConsole('/voteprev - Starts vote for previous map', COLOR_2);
+		Player.WriteConsole('/votenext - Disabled, use !v instead', COLOR_2);
+		Player.WriteConsole('Type /yes to accept or /no to reject the vote', COLOR_2);
 	end;
 	
 	if Text = '!mlr' then begin
@@ -1219,20 +1267,16 @@ begin
 		Player.WriteConsole('/showmapid - Show map index from MapList in SearchResult, do it before searching', COLOR_2);
 		Player.WriteConsole('/page <number> - Change page to <number>, type "/page 0" to close', COLOR_2);
 		Player.WriteConsole('You can also hold "Crouch"(forward) or "Jump"(back) key to change page', COLOR_2);
-		Player.WriteConsole('Admin commands:', COLOR_1);
-		Player.WriteConsole('/createsortedmaplist - Create sorted MapList if current one is outdated', COLOR_2);
-		Player.WriteConsole('/addmap <map name> - Add map to MapList (Default Soldat command)', COLOR_2);
-		Player.WriteConsole('/delmap <map name> - Remove map from MapList (Default Soldat command)', COLOR_2);
 	end;
 	
 	if Text = '!rules' then begin
 		Player.WriteConsole('Run Mode rules:', COLOR_1);
-		Player.WriteConsole('1. DO NOT troll.', COLOR_2);
-		Player.WriteConsole('4. DO NOT call admins without a reason.', COLOR_2);
-		Player.WriteConsole('5. DO NOT spam.', COLOR_2);
-		Player.WriteConsole('6. DO NOT cheat.', COLOR_2);
-		Player.WriteConsole('7. DO NOT verbal abuse other players, don''t be racist.', COLOR_2);
-		Player.WriteConsole('8. Have fun and good luck!', COLOR_2);
+		Player.WriteConsole('DO NOT troll.', COLOR_2);
+		Player.WriteConsole('DO NOT call admins without a reason.', COLOR_2);
+		Player.WriteConsole('DO NOT spam.', COLOR_2);
+		Player.WriteConsole('DO NOT cheat.', COLOR_2);
+		Player.WriteConsole('DO NOT verbal abuse other players, don''t be racist.', COLOR_2);
+		Player.WriteConsole('Have fun and good luck!', COLOR_2);
 	end;
 	
 	if Text = '!player' then begin
@@ -1375,11 +1419,19 @@ begin
 		DB_FinishQuery(DB_ID);
 	end;
 	
+//RUNMODE/CLIMB
 	if Text = '!elite' then begin
 		Player.WriteConsole('Points: Gold-25, Silver-20, Bronze-15, UpTo10th-10, 7, 5, 4, 3, 2, 1', COLOR_1);
 		for PosCounter := 0 to _EliteList.Count-1 do
 			Player.WriteConsole(_EliteList[PosCounter], COLOR_2);
 	end;
+	
+//CLIMB/RUNMODE
+	{if Text = '!elite' then begin
+		Player.WriteConsole('Points: Gold-12, Silver-6, Bronze-3, NoMedal-1', COLOR_1);
+		for PosCounter := 0 to _EliteList.Count-1 do
+			Player.WriteConsole(_EliteList[PosCounter], COLOR_2);
+	end;}
 	
 	if Text = '!last10' then begin
 		Player.WriteConsole(Player.Name+'''s last 10 caps', COLOR_1);
