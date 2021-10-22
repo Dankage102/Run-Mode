@@ -1,4 +1,4 @@
-//Run Mode 2.5 by Savage
+//Run Mode v3(1.7.1.1) by Savage
 
 uses database;
 	
@@ -21,7 +21,7 @@ end;
 var
 	_CheckPoint: array of tCheckPoint;
 	_Laps: Byte;
-	_ReplayTime, _WorldTextLoop: Integer;
+	_ReplayTime, _WorldTextLoop, _ReplayTime2, _WorldTextLoop2: Integer;
 	_LapsPassed, _CheckPointPassed: array[1..32] of Byte;
 	_Timer: array[1..32] of TDateTime;
 	{$IFDEF RUN_MODE_DEBUG}
@@ -30,8 +30,8 @@ var
 	_ShowTimer, _RKill, _LoggedIn, _JustDied, _FlightMode, _GodMode: array[1..32] of Boolean;
 	_EliteList, _UsedIP: TStringList;
 	_Record: array[1..32] of array of tRecord;
-	_Replay: array of tRecord;
-	_ScoreId: String;
+	_Replay, _Replay2: array of tRecord;
+	_ScoreId, _ReplayInfo, _ReplayInfo2: String;
 	_EditMode: Boolean;
 	_LastPosX, _LastPosY: array[1..32] of Single;
 	
@@ -320,19 +320,39 @@ var
 	TempTime, TempTime2, Timer: TDateTime;
 begin
 	if Ticks mod 6 = 0 then begin
-		if _WorldTextLoop = 240 then
-			_WorldTextLoop := 200;
-		
-		Inc(_WorldTextLoop, 1);
-		
-		if Length(_Replay) > 0 then
+		if Length(_Replay) > 0 then begin
+			if _WorldTextLoop = 240 then
+				_WorldTextLoop := 200;
+			
+			Inc(_WorldTextLoop, 1);
+			
 			if _ReplayTime < Length(_Replay) then begin
 				Inc(_ReplayTime, 1);
 				Players.WorldText(_WorldTextLoop, '.', 240, $FF0000, 0.15, _Replay[_ReplayTime-1].X+30*-0.15, _Replay[_ReplayTime-1].Y+140*-0.15);
+				Players.BigText(10, _ReplayInfo+' '+IntToStr(_ReplayTime)+'/'+IntToStr(Length(_Replay)), 120, $FF0000, 0.05, 5, 340);
 				
-				if _ReplayTime = Length(_Replay) then
+				if (_ReplayTime = Length(_Replay)) and (Length(_Replay2) = 0) then
 					_ReplayTime := 0;
 			end;
+		end;
+		
+		if Length(_Replay2) > 0 then begin
+			if _WorldTextLoop2 = 190 then
+				_WorldTextLoop2 := 150;
+			
+			Inc(_WorldTextLoop2, 1);
+			
+			if _ReplayTime2 < Length(_Replay2) then begin
+				Inc(_ReplayTime2, 1);
+				Players.WorldText(_WorldTextLoop2, '.', 240, $0000FF, 0.15, _Replay2[_ReplayTime2-1].X+30*-0.15, _Replay2[_ReplayTime2-1].Y+140*-0.15);
+				Players.BigText(11, _ReplayInfo2+' '+IntToStr(_ReplayTime2)+'/'+IntToStr(Length(_Replay2)), 120, $0000FF, 0.05, 5, 360);
+			end;
+			
+			if (_ReplayTime2 = Length(_Replay2)) and (_ReplayTime = Length(_Replay)) then begin
+				_ReplayTime2 := 0;
+				_ReplayTime := 0;
+			end;
+		end;
 	end;
 	
 	for i := 1 to 32 do
@@ -341,7 +361,7 @@ begin
 			if Ticks mod 6 = 0 then
 				if Players[i].Alive then
 					if Length(_Record[i]) > 0 then begin
-						if Distance(_Record[i][High(_Record[i])].X, _Record[i][High(_Record[i])].Y, Players[i].X, Players[i].Y) >= 200 then begin
+						if Distance(_Record[i][High(_Record[i])].X, _Record[i][High(_Record[i])].Y, Players[i].X, Players[i].Y) >= 300 then begin
 							Players[i].Damage(i, 150);
 							Players.WriteConsole('Offmap bug, lag or teleport cheat detected, player '+Players[i].Name+' has been killed', $FF0000);
 							exit;
@@ -371,6 +391,10 @@ begin
 									Timer := Now - _Timer[i];
 									{$IFDEF RUN_MODE_DEBUG}
 										Players[i].WriteConsole('Respawn Ping: '+IntToStr(_PingRespawn[i])+', Finish Ping: '+IntToStr(Players[i].Ping), $FF0000);
+										if _PingRespawn[i] >= Players[i].Ping then
+											Players[i].WriteConsole('Ping Compensated Time: '+ShowTime(Timer - (1.0/86400000*Players[i].Ping)), $FF0000)
+										else
+											Players[i].WriteConsole('Ping Compensated Time: '+ShowTime(Timer - (1.0/86400000*_PingRespawn[i])), $FF0000);
 									{$ENDIF}
 								end;
 						end else
@@ -734,19 +758,21 @@ if Player <> nil then begin//In-Game Admin
 		Player.WriteConsole('/cplaps <amount> - Sets amount of laps', COLOR_2);
 		Player.WriteConsole('/cpsave - Saves current checkpoints'' setting', COLOR_2);
 		Player.WriteConsole('/replay <id> - Replays certain score', COLOR_2);
-		Player.WriteConsole('/replaystop - Stops current replay', COLOR_2);
+		Player.WriteConsole('/replay2 <id> <id> - Replays two scores at the same time', COLOR_2);
+		Player.WriteConsole('/replaystop - Stops all replays', COLOR_2);
 		Player.WriteConsole('PlayersDB:', COLOR_1);
 		Player.WriteConsole('/checkid <playerid(1-32)> - Check all nicks and entries for certain hwid', COLOR_2);
 		Player.WriteConsole('/checknick <nick> - Check all hwids and entries for certain nick', COLOR_2);
 		Player.WriteConsole('/checkhw <hwid> - Check all nicks and entries for certain hwid', COLOR_2);
-		Player.WriteConsole('MapListReader:', COLOR_1);
-		Player.WriteConsole('/createsortedmaplist - Create sorted MapList if current one is outdated', COLOR_2);
-		Player.WriteConsole('/addmap <map name> - Add map to MapList (Default Soldat command)', COLOR_2);
-		Player.WriteConsole('/delmap <map name> - Remove map from MapList (Default Soldat command)', COLOR_2);
+		Player.WriteConsole('/admcmds2 - Commands for admins 2/2', $FFFF00);
 	end;
 	
 	if Command = '/admcmds2' then begin
 		Player.WriteConsole('Commands for admins 2/2:', $FFFF00);
+		Player.WriteConsole('MapListReader:', COLOR_1);
+		Player.WriteConsole('/createsortedmaplist - Create sorted MapList if current one is outdated', COLOR_2);
+		Player.WriteConsole('/addmap <map name> - Add map to MapList (Default Soldat command)', COLOR_2);
+		Player.WriteConsole('/delmap <map name> - Remove map from MapList (Default Soldat command)', COLOR_2);
 		Player.WriteConsole('MapListRandomizer:', COLOR_1);
 		Player.WriteConsole('/mlrand - Randomizes MapList', COLOR_2);
 	end;
@@ -963,10 +989,95 @@ if Player <> nil then begin//In-Game Admin
 				_Replay[High(_Replay)].Y := DB_GetDouble(DB_ID, 1);
 			end;
 			
-			if Length(_Replay) > 0 then
-				Players.WriteConsole('Replay loaded', COLOR_1)
-			else
+			if Length(_Replay) > 0 then begin
+				
+				DB_FinishQuery(DB_ID);
+				
+				if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Id = '''+EscapeApostrophe(Command)+''' LIMIT 1;') then
+					WriteLn('RunModeError112: '+DB_Error)
+				else
+					if Not DB_NextRow(DB_ID) then begin
+						Players.WriteConsole('Score for current map with ID '+Command+' not found', COLOR_2);
+						_ReplayInfo := 'Wrong replay ID for current map';
+					end else
+						_ReplayInfo := '['+DB_GetString(DB_ID, 0)+'] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+DB_GetString(DB_ID, 4)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']';
+				
+				Players.WriteConsole('Replay loaded', COLOR_1);
+				_WorldTextLoop := 200;
+			end else
 				Players.WriteConsole('Empty replay', COLOR_1);
+		end;
+		
+		DB_FinishQuery(DB_ID);
+	end;
+	
+	if (Copy(Command, 1, 9) = '/replay2 ') and (Length(Command)>9) then begin
+		Delete(Command, 1, 9);
+		
+		Players.WriteConsole('Loading replays '+GetPiece(Command, ' ', 0)+'(red), '+GetPiece(Command, ' ', 1)+'(blue)...', COLOR_1);
+		
+		if Not DB_Query(DB_ID, 'SELECT PosX, PosY FROM '''+EscapeApostrophe(GetPiece(Command, ' ', 0))+''';') then
+			Players.WriteConsole('RunModeError111: '+DB_Error, COLOR_1)
+		else begin
+			SetLength(_Replay, 0);
+			_ReplayTime := 0;
+			
+			While DB_NextRow(DB_ID) Do begin
+				SetLength(_Replay, Length(_Replay)+1);
+				_Replay[High(_Replay)].X := DB_GetDouble(DB_ID, 0);
+				_Replay[High(_Replay)].Y := DB_GetDouble(DB_ID, 1);
+			end;
+			
+			if Length(_Replay) > 0 then begin
+				
+				DB_FinishQuery(DB_ID);
+				
+				if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Id = '''+EscapeApostrophe(GetPiece(Command, ' ', 0))+''' LIMIT 1;') then
+					WriteLn('RunModeError112: '+DB_Error)
+				else
+					if Not DB_NextRow(DB_ID) then begin
+						Players.WriteConsole('Score for current map with ID '+GetPiece(Command, ' ', 0)+' not found', COLOR_2);
+						_ReplayInfo := 'Wrong replay ID for current map';
+					end else
+						_ReplayInfo := '['+DB_GetString(DB_ID, 0)+'] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+DB_GetString(DB_ID, 4)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']';
+				
+				Players.WriteConsole('Replay loaded', COLOR_1);
+				_WorldTextLoop := 200;
+			end else
+				Players.WriteConsole('Empty replay', COLOR_1);
+		end;
+		
+		DB_FinishQuery(DB_ID);
+		
+		if Not DB_Query(DB_ID, 'SELECT PosX, PosY FROM '''+EscapeApostrophe(GetPiece(Command, ' ', 1))+''';') then
+			Players.WriteConsole('RunModeError112: '+DB_Error, COLOR_1)
+		else begin
+			SetLength(_Replay2, 0);
+			_ReplayTime2 := 0;
+			
+			While DB_NextRow(DB_ID) Do begin
+				SetLength(_Replay2, Length(_Replay2)+1);
+				_Replay2[High(_Replay2)].X := DB_GetDouble(DB_ID, 0);
+				_Replay2[High(_Replay2)].Y := DB_GetDouble(DB_ID, 1);
+			end;
+			
+			if Length(_Replay2) > 0 then begin
+				
+				DB_FinishQuery(DB_ID);
+				
+				if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Id = '''+EscapeApostrophe(GetPiece(Command, ' ', 1))+''' LIMIT 1;') then
+					WriteLn('RunModeError113: '+DB_Error)
+				else
+					if Not DB_NextRow(DB_ID) then begin
+						Players.WriteConsole('Score for current map with ID '+GetPiece(Command, ' ', 1)+' not found', COLOR_2);
+						_ReplayInfo2 := 'Wrong replay ID for current map';
+					end else
+						_ReplayInfo2 := '['+DB_GetString(DB_ID, 0)+'] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+DB_GetString(DB_ID, 4)+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']';
+				
+				Players.WriteConsole('Replay2 loaded', COLOR_1);
+				_WorldTextLoop2 := 150;
+			end else
+				Players.WriteConsole('Empty replay2', COLOR_1);
 		end;
 		
 		DB_FinishQuery(DB_ID);
@@ -975,8 +1086,14 @@ if Player <> nil then begin//In-Game Admin
 	if Command = '/replaystop' then begin
 		SetLength(_Replay, 0);
 		_ReplayTime := 0;
-		Players.WriteConsole('Replay stopped', COLOR_1);
+		
+		SetLength(_Replay2, 0);
+		_ReplayTime2 := 0;
+		
+		Players.WriteConsole('All Replays stopped', COLOR_1);
 	end;
+	
+//TEST ZONE
 	
 	if Command = '/lastscores' then begin
 		Player.WriteConsole('Last 20 scores', COLOR_1);
@@ -988,26 +1105,19 @@ if Player <> nil then begin//In-Game Admin
 		DB_FinishQuery(DB_ID);
 	end;
 	
-	if Command = '/changenick' then begin
-		if Not DB_Update(DB_ID, 'UPDATE Accounts SET Name = ''~>2Fast|`HaSte.|'' WHERE Name = ''bp.Energy'';') then
-			Player.WriteConsole('RunModeError54: '+DB_Error, COLOR_1);
-		if Not DB_Update(DB_ID, 'UPDATE Scores SET Account = ''~>2Fast|`HaSte.|'' WHERE Account = ''bp.Energy'';') then
-			Player.WriteConsole('RunModeError55: '+DB_Error, COLOR_1);
+	if (Copy(Command, 1, 8) = '/last30 ') and (Copy(Command, 9, Length(Command)) <> nil) then begin
+		Player.WriteConsole(Copy(Command, 9, Length(Command))+'''s last 30 scores', COLOR_1);
+		if Not DB_Query(DB_ID, 'SELECT Map, Date, Time FROM Scores WHERE Account = '''+EscapeApostrophe(Copy(Command, 9, Length(Command)))+''' ORDER BY Date DESC LIMIT 30;') then
+			WriteLn('RunModeError61: '+DB_Error)
+		else
+			While DB_NextRow(DB_ID) Do
+				Player.WriteConsole('Map: '+DB_GetString(DB_ID, 0)+', Time: '+ShowTime(DB_GetDouble(DB_ID, 2))+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_2);
+		DB_FinishQuery(DB_ID);
 	end;
 	
-	if Command = '/changemap' then begin
-		if Not DB_Update(DB_ID, 'UPDATE Scores SET Map = ''s1_claustro'' WHERE Map = ''l1_claustro'';') then
-			Player.WriteConsole('RunModeError56: '+DB_Error, COLOR_1);
-	end;
-	
-	if Command = '/delbugtime' then begin
-		if Not DB_Update(DB_ID, 'DELETE FROM Scores WHERE Time < 1.0/86400;') then
-			Player.WriteConsole('RunModeError57: '+DB_Error, COLOR_1);
-	end;
-	
-	if Command = '/delall' then begin
-		if Not DB_Update(DB_ID, 'DELETE FROM Scores;') then
-			Player.WriteConsole('RunModeError58: '+DB_Error, COLOR_1);
+	if Command = '/disttest' then begin
+		Players.WorldText(100, '.', 180, $FF0000, 0.15, Player.X, Player.Y);
+		Players.WorldText(101, '.', 180, $00FF00, 0.15, Player.X+300, Player.Y);
 	end;
 	
 	if Command = '/test4' then begin
@@ -1019,40 +1129,38 @@ if Player <> nil then begin//In-Game Admin
 		DB_FinishQuery(DB_ID);
 	end;
 	
-	if Command = '/mypos' then
-		Player.WriteConsole('x:'+FloatToStr(Player.X)+' y:'+FloatToStr(Player.Y), COLOR_1);
-		
-	if Command = '/health' then
-		Player.WriteConsole(floattostr(Player.health), COLOR_1);
+	{if Command = '/changenick' then begin
+		if Not DB_Update(DB_ID, 'UPDATE Accounts SET Name = ''~>2Fast|`HaSte.|'' WHERE Name = ''bp.Energy'';') then
+			Player.WriteConsole('RunModeError54: '+DB_Error, COLOR_1);
+		if Not DB_Update(DB_ID, 'UPDATE Scores SET Account = ''~>2Fast|`HaSte.|'' WHERE Account = ''bp.Energy'';') then
+			Player.WriteConsole('RunModeError55: '+DB_Error, COLOR_1);
+	end;}
 	
-	if Command = '/query123' then begin
+	{if Command = '/changemap' then begin
+		if Not DB_Update(DB_ID, 'UPDATE Scores SET Map = ''s1_claustro'' WHERE Map = ''l1_claustro'';') then
+			Player.WriteConsole('RunModeError56: '+DB_Error, COLOR_1);
+	end;}
+	
+	{if Command = '/delbugtime' then begin
+		if Not DB_Update(DB_ID, 'DELETE FROM Scores WHERE Time < 1.0/86400;') then
+			Player.WriteConsole('RunModeError57: '+DB_Error, COLOR_1);
+	end;}
+	
+	{if Command = '/delall' then begin
+		if Not DB_Update(DB_ID, 'DELETE FROM Scores;') then
+			Player.WriteConsole('RunModeError58: '+DB_Error, COLOR_1);
+	end;}
+	
+	{if Command = '/query123' then begin
 		DatabaseUpdate(DB_ID, 'ALTER TABLE Accounts ADD COLUMN Email TEXT;');
 		DatabaseUpdate(DB_ID, 'ALTER TABLE Accounts ADD COLUMN Bookmarks TEXT;');
 		DatabaseUpdate(DB_ID, 'ALTER TABLE Accounts ADD COLUMN PremiumExpiry DOUBLE;');
-	end;
+	end;}
 	
-	if Command = '/2019' then
-		Players.WorldText(100, '2019', 1800, $FF0000, 1, Player.X, Player.Y-250);
-		
-	if Command = '/disttest' then begin
-		Players.WorldText(100, '.', 180, $FF0000, 0.15, Player.X, Player.Y);
-		Players.WorldText(101, '.', 180, $00FF00, 0.15, Player.X+300, Player.Y);
-	end;
-	
-	if Command = '/delaero' then begin
+	{if Command = '/delaero' then begin
 		if Not DB_Update(DB_ID, 'DELETE FROM Scores WHERE Map = ''Aero'';') then
 			Player.WriteConsole('RunModeError60: '+DB_Error, COLOR_1);
-	end;
-	
-	if (Copy(Command, 1, 8) = '/last30 ') and (Copy(Command, 9, Length(Command)) <> nil) then begin
-		Player.WriteConsole(Copy(Command, 9, Length(Command))+'''s last 30 scores', COLOR_1);
-		if Not DB_Query(DB_ID, 'SELECT Map, Date, Time FROM Scores WHERE Account = '''+EscapeApostrophe(Copy(Command, 9, Length(Command)))+''' ORDER BY Date DESC LIMIT 30;') then
-			WriteLn('RunModeError61: '+DB_Error)
-		else
-			While DB_NextRow(DB_ID) Do
-				Player.WriteConsole('Map: '+DB_GetString(DB_ID, 0)+', Time: '+ShowTime(DB_GetDouble(DB_ID, 2))+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 1)), COLOR_2);
-		DB_FinishQuery(DB_ID);
-	end;
+	end;}
 	
 end else
 begin//TCP Admin
@@ -1527,7 +1635,9 @@ end;
 
 procedure OnPlayerSpeak(Player: TActivePlayer; Text: String);
 var
-	PosCounter: Integer;
+	PosCounter, j: Integer;
+	TempString: String;
+	TopName, TopAmount: TStringList;
 begin
 	if Copy(Text, 1, 1) = '/' then
 		Player.WriteConsole('DO NOT TYPE "/" COMMANDS IN CHAT CONSOLE, PRESS "/" KEY TO ENABLE COMMANDS CONSOLE', $FF0000);
@@ -1541,7 +1651,7 @@ begin
 	end;
 	
 	if Text = '!commands' then begin
-		Player.WriteConsole('Run Mode commands:', COLOR_1);
+		Player.WriteConsole('Run Mode commands 1/2:', COLOR_1);
 		Player.WriteConsole('!whois - Shows connected admins', COLOR_2);
 		Player.WriteConsole('!admin/nick - Call connected TCP admin', COLOR_2);
 		Player.WriteConsole('!track <nickname> - Check ping of certain player', COLOR_2);
@@ -1550,13 +1660,22 @@ begin
 		Player.WriteConsole('!elite - Shows 20 best players', COLOR_2);
 		Player.WriteConsole('!top <map name> - Shows 3 best scores of certain map', COLOR_2);
 		Player.WriteConsole('!top10|20 <map name> - Shows 10|20 best scores of certain map', COLOR_2);
+		Player.WriteConsole('!scores - Shows online players'' scores', COLOR_2);
+		Player.WriteConsole('!score <nickname> - Shows certain player''s score on current map', COLOR_2);
 		Player.WriteConsole('!last10|20scores - Shows last 10|20 scores', COLOR_2);
 		Player.WriteConsole('!last10|20 <nickname> - Shows last 10|20 scores of certain player', COLOR_2);
 		Player.WriteConsole('!mlr - MapListReader commands', COLOR_2);
 		Player.WriteConsole('!player <nickname> - Shows stats of certain player', COLOR_2);
 		Player.WriteConsole('!report <text> - Sends an e-mail to Midgard Admins', COLOR_2);
 		Player.WriteConsole('!mcommands - E-mail commands', COLOR_2);
+		Player.WriteConsole('!commands2 - Run Mode commands 2/2', COLOR_2);
+		Player.WriteConsole('/admcmds - Commands for admins 1/2', $FFFF00);
+		Player.WriteConsole('/admcmds2 - Commands for admins 2/2', $FFFF00);
 		Player.WriteConsole('!rme - Essential resource to optimize your runs & improve your times', $c53159);
+	end;
+	
+	if Text = '!commands2' then begin
+		Player.WriteConsole('Run Mode commands 2/2:', COLOR_1);
 		Player.WriteConsole('/settings - Shows your account settings', COLOR_2);
 		Player.WriteConsole('/aladd - Set your machine to auto login', COLOR_2);
 		Player.WriteConsole('/aldel - Delete machine for auto login', COLOR_2);
@@ -1567,8 +1686,6 @@ begin
 		Player.WriteConsole('/login <password> - Login to your account', COLOR_2);
 		Player.WriteConsole('/logout - Logout from your account', COLOR_2);
 		Player.WriteConsole('/thief <id> <password> - Kick the player who''s taking your nickname', COLOR_2);
-		Player.WriteConsole('/admcmds - Commands for admins 1/2', $FFFF00);
-		Player.WriteConsole('/admcmds2 - Commands for admins 2/2', $FFFF00);
 	end;
 	
 	if Text = '!rme' then begin
@@ -1648,6 +1765,78 @@ begin
 				Players.WriteConsole('Bronze: '+DB_GetString(DB_ID, 2), $F4A460);
 				Players.WriteConsole('NoMedal: '+DB_GetString(DB_ID, 3), COLOR_2);
 			end;
+		DB_FinishQuery(DB_ID);
+	end;
+	
+	if Text = '!scores' then begin
+		TopName := File.CreateStringList;
+		TopAmount := File.CreateStringList;
+		Player.WriteConsole('Online players'' scores', COLOR_1);
+		for PosCounter := 1 to 32 do
+			if Players[PosCounter].Active then begin
+				//Does not work, sqlite ver. too old :( ? if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT ROW_NUMBER () OVER (ORDER BY Time, Date) Position, Time, Date, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') AS ScoresResultSet WHERE Account = '''+EscapeApostrophe(Player.Name)+''' LIMIT 1;') then
+				if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Account = '''+EscapeApostrophe(Players[PosCounter].Name)+''' LIMIT 1;') then
+					WriteLn('RunModeError110: '+DB_Error)
+				else
+					if DB_NextRow(DB_ID) then begin
+						TopName.Append(ShowTime(DB_GetDouble(DB_ID, 1))+' by '+Players[PosCounter].Name+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']');
+						TopAmount.Append(DB_GetString(DB_ID, 0));
+						
+						for j := TopName.Count-1 downto 1 do
+							if StrToInt(TopAmount[j]) < StrToInt(TopAmount[j-1]) then begin
+								TopName.Exchange(j-1, j);
+								TopAmount.Exchange(j-1, j);
+							end else break;
+					end;
+				DB_FinishQuery(DB_ID);
+			end;
+		
+		for PosCounter := 0 to TopName.Count-1 do
+			case StrToInt(TopAmount[PosCounter]) of
+				1 : Player.WriteConsole('[1] '+TopName[PosCounter], $FFD700);
+				2 : Player.WriteConsole('[2] '+TopName[PosCounter], $C0C0C0);
+				3 : Player.WriteConsole('[3] '+TopName[PosCounter], $F4A460);
+				else Player.WriteConsole('['+TopAmount[PosCounter]+'] '+TopName[PosCounter], COLOR_1);
+			end;
+		
+		TopName.Free;
+		TopAmount.Free;
+	end;
+	
+	if Text = '!score' then begin
+		Players.WriteConsole(Player.Name+'''s score', COLOR_1);
+		//Does not work, sqlite ver. too old :( ? if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT ROW_NUMBER () OVER (ORDER BY Time, Date) Position, Time, Date, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') AS ScoresResultSet WHERE Account = '''+EscapeApostrophe(Player.Name)+''' LIMIT 1;') then
+		if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Account = '''+EscapeApostrophe(Player.Name)+''' LIMIT 1;') then
+			WriteLn('RunModeError108: '+DB_Error)
+		else
+			if Not DB_NextRow(DB_ID) then
+				Players.WriteConsole('Score not found', COLOR_2)
+			else
+				case DB_GetLong(DB_ID, 0) of
+					1 : Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+Player.Name+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
+					2 : Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+Player.Name+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
+					3 : Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+Player.Name+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
+					else Players.WriteConsole('['+DB_GetString(DB_ID, 0)+'] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+Player.Name+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', COLOR_1);
+				end;
+		DB_FinishQuery(DB_ID);
+	end;
+	
+	if (Copy(Text, 1, 7) = '!score ') and (Copy(Text, 8, Length(Text)) <> nil) then begin
+		TempString := Copy(Text, 8, Length(Text));
+		Players.WriteConsole(TempString+'''s score', COLOR_1);
+		//Does not work, sqlite ver. too old :( ? if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT ROW_NUMBER () OVER (ORDER BY Time, Date) Position, Time, Date, Id FROM Scores WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') AS ScoresResultSet WHERE Account = '''+EscapeApostrophe(Player.Name)+''' LIMIT 1;') then
+		if Not DB_Query(DB_ID, 'SELECT * FROM (SELECT 1+(SELECT count(*) FROM Scores a WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''' AND (a.Time < b.Time OR (a.Time = b.Time AND a.Date < b.Date))) AS Position, Time, Date, Id, Account FROM Scores b WHERE Map = '''+EscapeApostrophe(Game.CurrentMap)+''') WHERE Account = '''+EscapeApostrophe(TempString)+''' LIMIT 1;') then
+			WriteLn('RunModeError109: '+DB_Error)
+		else
+			if Not DB_NextRow(DB_ID) then
+				Players.WriteConsole('Score not found', COLOR_2)
+			else
+				case DB_GetLong(DB_ID, 0) of
+					1 : Players.WriteConsole('[1] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+TempString+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $FFD700);
+					2 : Players.WriteConsole('[2] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+TempString+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $C0C0C0);
+					3 : Players.WriteConsole('[3] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+TempString+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', $F4A460);
+					else Players.WriteConsole('['+DB_GetString(DB_ID, 0)+'] '+ShowTime(DB_GetDouble(DB_ID, 1))+' by '+TempString+' on '+FormatDateTime('yyyy.mm.dd hh:nn:ss', DB_GetDouble(DB_ID, 2))+' ['+DB_GetString(DB_ID, 3)+']', COLOR_1);
+				end;
 		DB_FinishQuery(DB_ID);
 	end;
 	
@@ -1922,6 +2111,13 @@ begin
 	SetLength(_CheckPoint, 0);
 	_Laps := 0;
 	
+	//Stop Replays
+	SetLength(_Replay, 0);
+	_ReplayTime := 0;
+		
+	SetLength(_Replay2, 0);
+	_ReplayTime2 := 0;
+	
 	Players.WriteConsole('Recounting medals...', COLOR_1);
 	TimeStart  := Now;
 	RecountAllStats;
@@ -2134,4 +2330,5 @@ end;
 
 begin
 	Init;
+	Players.WriteConsole('Run Mode v3(1.7.1.1) by Savage', Random(0, 16777215+1));
 end.
